@@ -82,199 +82,12 @@ struct ComposerView: View {
     private var composer: some View {
         VStack(spacing: 0) {
             if !attachments.isEmpty {
-                ScrollView(.horizontal) {
-                    HStack(spacing: 5) {
-                        ForEach(attachments) { attachment in
-                            attachmentChip(attachment)
-                        }
-                    }
-                    .padding(.horizontal, 11)
-                    .padding(.top, 9)
-                }
-                .scrollIndicators(.hidden)
+                attachmentTray
             }
-
-            if !filteredCommands.isEmpty {
-                suggestionPanel(title: "COMMANDS") {
-                    ForEach(filteredCommands) { command in
-                        suggestionRow(
-                            icon: "slash.circle",
-                            title: "/\(command.name)",
-                            subtitle: command.description ?? "Run command",
-                            selected: false
-                        ) {
-                            text = "/\(command.name) "
-                            focused = true
-                        }
-                    }
-                }
-            } else if !mentionResults.isEmpty, fileQuery != nil {
-                suggestionPanel(title: "MENTION FILE") {
-                    ForEach(mentionResults.prefix(7)) { file in
-                        suggestionRow(
-                            icon: file.isDirectory ? "folder" : "doc.text",
-                            title: file.path,
-                            subtitle: file.isDirectory ? "Folder" : "File",
-                            selected: false
-                        ) {
-                            insert(filePath: file.path)
-                        }
-                    }
-                }
-            }
-
-            ZStack(alignment: .topLeading) {
-                if text.isEmpty {
-                    Text(placeholder)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.ocTextTertiary)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .allowsHitTesting(false)
-                }
-                TextEditor(text: $text)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.ocTextPrimary)
-                    .scrollContentBackground(.hidden)
-                    .background(Color.clear)
-                    .focused($focused)
-                    .frame(height: editorHeight)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 10)
-                    .overlay {
-                        DropInterceptor { urls, data in
-                            accept(urls: urls, data: data)
-                        }
-                        .frame(height: editorHeight + 20)
-                        .padding(.vertical, -10)
-                    }
-                    .onKeyPress(.return, phases: .down) { press in
-                        if press.modifiers.contains(.shift) || press.modifiers.contains(.option) {
-                            return .ignored
-                        }
-                        if commandQuery != nil, let command = filteredCommands.first {
-                            text = "/\(command.name) "
-                            return .handled
-                        }
-                        if fileQuery != nil, let file = mentionResults.first {
-                            insert(filePath: file.path)
-                            return .handled
-                        }
-                        submit()
-                        return .handled
-                    }
-            }
-
-            HStack(spacing: 5) {
-                Button {
-                    showFileImporter = true
-                } label: {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.ocTextTertiary)
-                        .frame(width: 26, height: 24)
-                }
-                .buttonStyle(.plain)
-                .help("Attach files")
-
-                Button {
-                    if !text.hasPrefix("/") { text = "/" }
-                    focused = true
-                } label: {
-                    Image(systemName: "command")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(commandQuery != nil ? Color.ocAccent : Color.ocTextTertiary)
-                        .frame(width: 26, height: 24)
-                }
-                .buttonStyle(.plain)
-                .help("Commands")
-
-                Button {
-                    withAnimation(Motion.quick) { shellMode.toggle() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "terminal")
-                        if shellMode { Text("SHELL") }
-                    }
-                    .font(.ocMono(9, weight: .semibold))
-                    .foregroundStyle(shellMode ? Color.ocTeal : Color.ocTextTertiary)
-                    .padding(.horizontal, shellMode ? 6 : 2)
-                    .frame(height: 24)
-                    .background(
-                        RoundedRectangle(cornerRadius: 5)
-                            .fill(shellMode ? Color.ocTeal.opacity(0.10) : .clear)
-                    )
-                }
-                .buttonStyle(.plain)
-                .help("Run a shell command instead of prompting the agent")
-
-                Divider().frame(height: 14).opacity(0.5)
-
-                agentMenu
-                modelButton
-
-                if model.isBusy {
-                    deliveryMenu
-                }
-
-                Spacer()
-
-                if let usage = model.selectedSession?.tokens, usage.total > 0 {
-                    Text("\(Format.tokens(usage.total)) tok")
-                        .font(.ocMono(8.5))
-                        .foregroundStyle(Color.ocTextTertiary)
-                        .padding(.trailing, 2)
-                }
-
-                if model.isBusy {
-                    Button {
-                        Task { await model.stopGeneration() }
-                    } label: {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 9.5, weight: .bold))
-                            .foregroundStyle(Color.ocDanger)
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(Color.ocDanger.opacity(0.12)))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Stop generating (⌘.)")
-                }
-
-                Button(action: submit) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 29, height: 29)
-                        .background(
-                            Circle()
-                                .fill(canSubmit ? AnyShapeStyle(LinearGradient(colors: [Color.ocAccent, Color.ocAccent.opacity(0.78)], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(Color.ocTextTertiary.opacity(0.2)))
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(!canSubmit)
-                .help("Send (↩)")
-            }
-            .padding(.horizontal, 9)
-            .padding(.bottom, 8)
-            .padding(.top, 2)
-
-            HStack(spacing: 8) {
-                if shellMode {
-                    Tag(text: "SHELL MODE", icon: "terminal", tint: .ocTeal)
-                } else {
-                    Text("↩ send · ⇧↩ newline · @ files · / commands")
-                        .font(.ocMono(8.5))
-                        .foregroundStyle(Color.ocTextTertiary.opacity(0.8))
-                }
-                Spacer()
-                if !model.isBusy {
-                    Text(model.delivery == "queue" ? "queue" : "steer")
-                        .font(.ocMono(8))
-                        .foregroundStyle(Color.ocTextTertiary.opacity(0.65))
-                }
-            }
-            .padding(.horizontal, 13)
-            .padding(.bottom, 7)
+            suggestions
+            textEntryArea
+            toolbar
+            footerHints
         }
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -294,6 +107,188 @@ struct ComposerView: View {
             accept(urls: urls, data: [])
             return true
         }
+    }
+
+    private var attachmentTray: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 5) {
+                ForEach(attachments) { attachment in
+                    attachmentChip(attachment)
+                }
+            }
+            .padding(.horizontal, 11)
+            .padding(.top, 9)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    @ViewBuilder
+    private var suggestions: some View {
+        if !filteredCommands.isEmpty {
+            suggestionPanel(title: "COMMANDS") {
+                ForEach(filteredCommands) { command in
+                    suggestionRow(
+                        icon: "slash.circle",
+                        title: "/\(command.name)",
+                        subtitle: command.description ?? "Run command",
+                        selected: false
+                    ) {
+                        text = "/\(command.name) "
+                        focused = true
+                    }
+                }
+            }
+        } else if !mentionResults.isEmpty, fileQuery != nil {
+            suggestionPanel(title: "MENTION FILE") {
+                ForEach(mentionResults.prefix(7)) { file in
+                    suggestionRow(
+                        icon: file.isDirectory ? "folder" : "doc.text",
+                        title: file.path,
+                        subtitle: file.isDirectory ? "Folder" : "File",
+                        selected: false
+                    ) {
+                        insert(filePath: file.path)
+                    }
+                }
+            }
+        }
+    }
+
+    private var textEntryArea: some View {
+        ZStack(alignment: .topLeading) {
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.ocTextTertiary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .allowsHitTesting(false)
+            }
+            ComposerTextEditor(
+                text: $text,
+                focused: $focused,
+                onSubmitReturn: handleReturnKey,
+                onImageDrop: { accept(urls: [], data: $0) }
+            )
+            .frame(height: editorHeight)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private var toolbar: some View {
+        HStack(spacing: 5) {
+            Button {
+                showFileImporter = true
+            } label: {
+                Image(systemName: "paperclip")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.ocTextTertiary)
+                    .frame(width: 26, height: 24)
+            }
+            .buttonStyle(.plain)
+            .help("Attach files")
+
+            Button {
+                if !text.hasPrefix("/") { text = "/" }
+                focused = true
+            } label: {
+                Image(systemName: "command")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(commandQuery != nil ? Color.ocAccent : Color.ocTextTertiary)
+                    .frame(width: 26, height: 24)
+            }
+            .buttonStyle(.plain)
+            .help("Commands")
+
+            Button {
+                withAnimation(Motion.quick) { shellMode.toggle() }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "terminal")
+                    if shellMode { Text("SHELL") }
+                }
+                .font(.ocMono(9, weight: .semibold))
+                .foregroundStyle(shellMode ? Color.ocTeal : Color.ocTextTertiary)
+                .padding(.horizontal, shellMode ? 6 : 2)
+                .frame(height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(shellMode ? Color.ocTeal.opacity(0.10) : .clear)
+                )
+            }
+            .buttonStyle(.plain)
+            .help("Run a shell command instead of prompting the agent")
+
+            Divider().frame(height: 14).opacity(0.5)
+
+            agentMenu
+            modelButton
+
+            if model.isBusy {
+                deliveryMenu
+            }
+
+            Spacer()
+
+            if let usage = model.selectedSession?.tokens, usage.total > 0 {
+                Text("\(Format.tokens(usage.total)) tok")
+                    .font(.ocMono(8.5))
+                    .foregroundStyle(Color.ocTextTertiary)
+                    .padding(.trailing, 2)
+            }
+
+            if model.isBusy {
+                Button {
+                    Task { await model.stopGeneration() }
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(Color.ocDanger)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color.ocDanger.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+                .help("Stop generating (⌘.)")
+            }
+
+            Button(action: submit) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 29, height: 29)
+                    .background(
+                        Circle()
+                            .fill(canSubmit ? AnyShapeStyle(LinearGradient(colors: [Color.ocAccent, Color.ocAccent.opacity(0.78)], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(Color.ocTextTertiary.opacity(0.2)))
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSubmit)
+            .help("Send (↩)")
+        }
+        .padding(.horizontal, 9)
+        .padding(.bottom, 8)
+        .padding(.top, 2)
+    }
+
+    private var footerHints: some View {
+        HStack(spacing: 8) {
+            if shellMode {
+                Tag(text: "SHELL MODE", icon: "terminal", tint: .ocTeal)
+            } else {
+                Text("↩ send · ⇧↩ newline · @ files · / commands")
+                    .font(.ocMono(8.5))
+                    .foregroundStyle(Color.ocTextTertiary.opacity(0.8))
+            }
+            Spacer()
+            if !model.isBusy {
+                Text(model.delivery == "queue" ? "queue" : "steer")
+                    .font(.ocMono(8))
+                    .foregroundStyle(Color.ocTextTertiary.opacity(0.65))
+            }
+        }
+        .padding(.horizontal, 13)
+        .padding(.bottom, 7)
     }
 
     private var agentMenu: some View {
@@ -394,6 +389,21 @@ struct ComposerView: View {
 
     private var canSubmit: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && model.canChat
+    }
+
+    /// Return key from the text view: autocomplete for `/` and `@`, otherwise send.
+    /// Returning true means "handled — do not insert a newline".
+    private func handleReturnKey() -> Bool {
+        if commandQuery != nil, let command = filteredCommands.first {
+            text = "/\(command.name) "
+            return true
+        }
+        if fileQuery != nil, let file = mentionResults.first {
+            insert(filePath: file.path)
+            return true
+        }
+        submit()
+        return true
     }
 
     private func accept(urls: [URL], data: [Data]) {
@@ -659,77 +669,173 @@ struct ComposerView: View {
     }
 }
 
-/// NSView overlay that captures file-drags before the embedded NSTextView turns
-/// them into path text. Ordinary clicks pass through via hit-test so the text
-/// cursor keeps working; only active drag sessions land on this view.
-struct DropInterceptor: NSViewRepresentable {
-    var onDrop: ([URL], [Data]) -> Void
+/// Plain-text NSTextView for the composer: swallows only raw Image drops,
+/// refuses URL drops so they reach the composer's dropDestination (chips),
+/// and handles Return / Shift+Return like the SwiftUI editor it replaces.
+final class ComposerTextView: NSTextView {
+    /// Raw image payload types handled directly (e.g. images dragged from a browser).
+    private static let imageTypes: [NSPasteboard.PasteboardType] = [
+        .png,
+        .tiff,
+        .init(UTType.jpeg.identifier),
+        .init(UTType.gif.identifier),
+        .init(UTType.heic.identifier)
+    ]
 
-    func makeNSView(context: Context) -> InterceptorView {
-        let view = InterceptorView()
-        view.onDropHandler = onDrop
-        return view
+    /// Called for Return/`Enter without Shift/Option. Returns true when the key was
+    /// handled (e.g. autocomplete insert or send) so no newline is inserted.
+    var returnHandler: (() -> Bool)?
+    /// Called with PNG payloads when raw image data is dropped.
+    var imageDropHandler: (([Data]) -> Void)?
+    /// Focus bridge to the SwiftUI `@FocusState` binding.
+    var focusHandler: ((Bool) -> Void)?
+
+    override func becomeFirstResponder() -> Bool {
+        let became = super.becomeFirstResponder()
+        if became { focusHandler?(true) }
+        return became
     }
 
-    func updateNSView(_ view: InterceptorView, context: Context) {
-        view.onDropHandler = onDrop
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        if resigned { focusHandler?(false) }
+        return resigned
     }
 
-    final class InterceptorView: NSView {
-        var onDropHandler: (([URL], [Data]) -> Void)?
-
-        private static let acceptedTypes: Set<String> = [
-            NSPasteboard.PasteboardType.fileURL.rawValue,
-            NSPasteboard.PasteboardType.URL.rawValue,
-            NSPasteboard.PasteboardType.png.rawValue,
-            NSPasteboard.PasteboardType.tiff.rawValue,
-            UTType.jpeg.identifier,
-            UTType.gif.identifier,
-            UTType.heic.identifier
-        ]
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            registerForDraggedTypes([
-                .fileURL,
-                .URL,
-                .png,
-                .tiff,
-                .init(UTType.jpeg.identifier),
-                .init(UTType.gif.identifier),
-                .init(UTType.heic.identifier)
-            ])
+    override func registerForDraggedTypes(_ newTypes: [NSPasteboard.PasteboardType]) {
+        // Strip URL types so file drags fall through to the composer's
+        // dropDestination, then make sure image payloads are handled here.
+        var types = newTypes.filter { $0 != .fileURL && $0 != .URL }
+        for imageType in Self.imageTypes where !types.contains(imageType) {
+            types.append(imageType)
         }
+        super.registerForDraggedTypes(types)
+    }
 
-        override func hitTest(_ point: NSPoint) -> NSView? {
-            // Active drag session? The system drag pasteboard is populated mid-drag.
-            let dragPasteboard = NSPasteboard(name: NSPasteboard.Name("Apple CFPasteboard drag"))
-            return dragPasteboard.types?.isEmpty == false ? self : nil
-        }
-
-        override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-            accepts(sender) ? .copy : []
-        }
-
-        override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-            accepts(sender) ? .copy : []
-        }
-
-        override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-            let pasteboard = sender.draggingPasteboard
-            let urls = (pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL])
-                ?? pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL]
-                ?? []
-            let images = pasteboard.readObjects(forClasses: [NSImage.self]) as? [NSImage] ?? []
-            let data = images.compactMap(\.pngData)
-
-            guard !urls.isEmpty || !data.isEmpty else { return false }
-            onDropHandler?(Array(urls.prefix(8)), data)
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let images = sender.draggingPasteboard.readObjects(forClasses: [NSImage.self]) as? [NSImage] ?? []
+        let data = images.compactMap(\.pngData)
+        if !data.isEmpty {
+            imageDropHandler?(data)
             return true
         }
+        return super.performDragOperation(sender)
+    }
 
-        private func accepts(_ sender: NSDraggingInfo) -> Bool {
-            sender.draggingPasteboard.types?.contains(where: { Self.acceptedTypes.contains($0.rawValue) }) ?? false
+    override func insertNewline(_ sender: Any?) {
+        // Let IME composition confirmations through untouched.
+        if markedRange().location != NSNotFound, markedRange().length > 0 {
+            super.insertNewline(sender)
+            return
+        }
+        let flags = NSApp.currentEvent?.modifierFlags.intersection(.deviceIndependentFlagsMask) ?? []
+        let splitsLine = flags.contains(.shift) || flags.contains(.option)
+        if splitsLine {
+            super.insertNewline(sender)
+        } else if returnHandler?() == false {
+            super.insertNewline(sender)
+        }
+    }
+}
+
+/// NSScrollView-backed composer text input replacing `TextEditor` so drop and
+/// Return behavior are fully controlled without hit-test workarounds.
+struct ComposerTextEditor: NSViewRepresentable {
+    @Binding var text: String
+    var focused: FocusState<Bool>.Binding
+    var onSubmitReturn: () -> Bool
+    var onImageDrop: ([Data]) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let textView = ComposerTextView()
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.allowsUndo = true
+        textView.drawsBackground = false
+        textView.isVerticallyResizable = true
+        textView.font = .systemFont(ofSize: 13)
+        textView.textColor = .labelColor
+        textView.insertionPointColor = .labelColor
+        textView.textContainerInset = NSSize(width: 5, height: 2)
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
+        textView.isAutomaticLinkDetectionEnabled = false
+        if let container = textView.textContainer {
+            container.widthTracksTextView = true
+            container.lineFragmentPadding = 0
+        }
+        textView.autoresizingMask = [.width]  // hmm: document view must resize with scroll width
+        textView.delegate = context.coordinator
+
+        let scroll = NSScrollView()
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = false
+        scroll.hasHorizontalScroller = false
+        scroll.autohidesScrollers = true
+        scroll.documentView = textView
+
+        context.coordinator.textView = textView
+        context.coordinator.applyParent(self)
+        return scroll
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        context.coordinator.applyParent(self)
+        guard let textView = scroll.documentView as? ComposerTextView else { return }
+        context.coordinator.syncText(text)
+        context.coordinator.syncFocus(focused.wrappedValue)
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: ComposerTextEditor
+        weak var textView: ComposerTextView?
+        private var isSyncing = false
+        private var wantsFocus = false
+
+        init(_ parent: ComposerTextEditor) {
+            self.parent = parent
+        }
+
+        func applyParent(_ parent: ComposerTextEditor) {
+            self.parent = parent
+            textView?.returnHandler = { [weak self] in self?.parent.onSubmitReturn() ?? false }
+            textView?.imageDropHandler = { [weak self] in self?.parent.onImageDrop($0) ?? () }
+            textView?.focusHandler = { [weak self] isFocused in
+                guard let self, self.parent.focused.wrappedValue != isFocused else { return }
+                self.isSyncing = true
+                self.parent.focused.wrappedValue = isFocused
+                self.wantsFocus = isFocused
+                self.isSyncing = false
+            }
+        }
+
+        func syncText(_ text: String) {
+            guard let textView, !isSyncing, textView.string != text else { return }
+            isSyncing = true
+            textView.string = text
+            textView.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+            isSyncing = false
+        }
+
+        func syncFocus(_ focused: Bool) {
+            guard !isSyncing else { return }
+            wantsFocus = focused
+            if focused, let textView, textView.window != nil, textView.window?.firstResponder !== textView {
+                textView.window?.makeFirstResponder(textView)
+            }
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView, !isSyncing else { return }
+            isSyncing = true
+            parent.text = textView.string
+            isSyncing = false
         }
     }
 }
