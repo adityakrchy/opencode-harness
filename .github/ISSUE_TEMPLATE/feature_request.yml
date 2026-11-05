@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest a native surface or improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        OpenCode Harness aims to be a *native* macOS surface for the OpenCode v2 API.
+        If your idea maps to an area the OpenCode CLI already supports but the
+        harness doesn't expose, that's usually the highest-value kind of request —
+        check the API coverage table in the README first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What are you trying to do, and what's missing or painful?
+      placeholder: I work across ten sessions and need to compare token spend per session.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Sketch the native UI you imagine — palette command? menu item? inspector section?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives / workarounds
+      description: Including CLI workarounds, macOS-native behaviors, or other clients.
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Are you willing to work on this?
+      options:
+        - label: I could help implement this (see CONTRIBUTING.md — DCO sign-off required)
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and discussions for this idea
+          required: true

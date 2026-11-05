@@ -1,0 +1,89 @@
+name: Bug report
+description: Something renders wrong, crashes, or misbehaves
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+        Please include screenshots for anything visual — they speed up triage a lot.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Also tell us what you *expected* to happen.
+      placeholder: When I drag an image onto the composer, the path is inserted as text instead of an attachment chip appearing.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a project
+        2. Start a session with the `build` agent
+        3. …
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Chat / streaming (timeline, reasoning, tool cards)
+        - Composer (input, attachments, commands, @ mentions)
+        - Sessions (list, fork, export/import, archive)
+        - Models / agents / providers
+        - Permissions / forms / approvals
+        - Files / diffs / VCS / worktrees
+        - Shell runner
+        - MCP / plugins / integrations
+        - Connection (local service, remote server, SSE, reconnect)
+        - Stats
+        - Settings
+        - Theme / rendering / accessibility
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: App version / commit
+      placeholder: v0.1.0 or commit hash
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: e.g. macOS 26.0 (M4)
+    validations:
+      required: true
+  - type: input
+    id: cli-version
+    attributes:
+      label: OpenCode CLI version
+      placeholder: output of `opencode --version`
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection mode
+      options:
+        - Local (managed background service)
+        - Local (private server fallback)
+        - Remote server URL
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or diagnostics
+      description: Run the failing flow, then copy relevant lines from the Diagnostics pane (Settings). Redact tokens and URLs you don't want to share.
+      render: shell
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag images here (light and dark, if relevant).

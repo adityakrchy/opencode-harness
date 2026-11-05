@@ -136,6 +136,36 @@ The harness keeps a single `AppModel` as the source of truth. The model:
 - `script/Snapshot/main.swift` — render deterministic screenshots of every screen without a logged-in desktop session
 - `script/Integration/Main.swift` — end-to-end smoke test of boot → create session → prompt → streamed reply → delete session
 
+## Contributing
+
+Contributions welcome! Start with [CONTRIBUTING.md](CONTRIBUTING.md) for build
+setup, code conventions, and the PR checklist. In short: no third-party
+dependencies, native UI tokens from `Theme.swift`, Conventional Commits, and a
+DCO sign-off (`git commit -s`) on every commit.
+
+- 🐛 Bug reports and feature requests → [issue templates](https://github.com/YOUR_GITHUB_USERNAME/opencode-harness/issues/new/choose)
+- 🔐 Security problems → **never** as public issues; see [SECURITY.md](SECURITY.md)
+- 🤝 Community conduct → [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+The code is released under the [MIT License](LICENSE).
+
+What that means, practically:
+
+- **You can** use, copy, modify, merge, publish, distribute, sell, and
+  sublicense the app and its source — including commercially. Build your own
+  client from it, ship it in your org, fork it, whatever.
+- **You cannot** hold the authors liable; the software comes "as is", without
+  warranty of any kind (expressed or implied). Read the full license text.
+- **The only obligation** is to keep the copyright + permission notice in
+  all copies or substantial parts of the software. If you distribute a binary
+  (e.g. your own build of this app), include the notice somewhere visible —
+  an About panel entry or a `LICENSE` file next to the app is enough.
+
+Note that **OpenCode itself is a separate project** with its own license; this
+repository covers only the harness. The name "OpenCode Harness" references the
+OpenCode project it integrates with and is not an official product of it.
+
+Contributions are accepted under the [DCO](https://developercertificate.org)
+and are licensed to everyone under the same MIT license.
