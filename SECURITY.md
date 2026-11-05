@@ -4,7 +4,7 @@
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, report them privately by email to **conductor@example.com**.
+Instead, report them privately by email to **adityakrchy101@gmail.com**.
 Include as much of the following as you can:
 
 - Type of issue (e.g. command injection, credential leak, privilege escalation)
@@ -25,7 +25,7 @@ OpenCode agent runtime**. Several behaviors are *by design* and are **not**
 security vulnerabilities, though reports about how to make them safer are still
 welcome:
 
-- **Not sandboxed, deliberately.** The app launches/discoverers the OpenCode CLI
+- **Not sandboxed, deliberately.** The app launches/discovers the OpenCode CLI
   and reads your project folders. This is documented in the README.
 - **The agent runs arbitrary commands.** Tool execution and the shell runner
   execute what you (or the model you chose) ask, guarded by OpenCode's own

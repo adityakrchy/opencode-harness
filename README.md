@@ -143,7 +143,7 @@ setup, code conventions, and the PR checklist. In short: no third-party
 dependencies, native UI tokens from `Theme.swift`, Conventional Commits, and a
 DCO sign-off (`git commit -s`) on every commit.
 
-- 🐛 Bug reports and feature requests → [issue templates](https://github.com/YOUR_GITHUB_USERNAME/opencode-harness/issues/new/choose)
+- 🐛 Bug reports and feature requests → [issue templates](https://github.com/adityakrchy/opencode-harness/issues/new/choose)
 - 🔐 Security problems → **never** as public issues; see [SECURITY.md](SECURITY.md)
 - 🤝 Community conduct → [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 

@@ -25,7 +25,7 @@ Requirements:
 Build and run:
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/opencode-harness
+git clone https://github.com/adityakrchy/opencode-harness
 cd opencode-harness
 ./script/build.sh          # release build into dist/
 open "dist/OpenCode Harness.app"
@@ -119,7 +119,7 @@ fix trivially signed-off-only PRs themselves with the author's permission.
 
 ## Reporting problems
 
-- Bugs → [Issues](https://github.com/YOUR_GITHUB_USERNAME/opencode-harness/issues) with the bug template
+- Bugs → [Issues](https://github.com/adityakrchy/opencode-harness/issues) with the bug template
 - Security → **do not file a public issue**; see [SECURITY.md](SECURITY.md)
 - Conduct issues → see [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
