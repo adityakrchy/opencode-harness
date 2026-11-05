@@ -141,6 +141,13 @@ struct ComposerView: View {
                     .frame(height: editorHeight)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 10)
+                    .overlay {
+                        DropInterceptor { urls, data in
+                            accept(urls: urls, data: data)
+                        }
+                        .frame(height: editorHeight + 20)
+                        .padding(.vertical, -10)
+                    }
                     .onKeyPress(.return, phases: .down) { press in
                         if press.modifiers.contains(.shift) || press.modifiers.contains(.option) {
                             return .ignored
@@ -284,11 +291,7 @@ struct ComposerView: View {
         .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
         .animation(Motion.quick, value: focused)
         .dropDestination(for: URL.self) { urls, _ in
-            for url in urls.prefix(8) {
-                if !attachments.contains(where: { $0.uri == url.absoluteString }) {
-                    attachments.append(PromptAttachment(uri: url.absoluteString, name: url.lastPathComponent))
-                }
-            }
+            accept(urls: urls, data: [])
             return true
         }
     }
@@ -393,6 +396,48 @@ struct ComposerView: View {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && model.canChat
     }
 
+    private func accept(urls: [URL], data: [Data]) {
+        var added = 0
+        for url in urls {
+            guard added < 8 else { break }
+            let attachment = PromptAttachment(
+                uri: url.absoluteString,
+                name: url.lastPathComponent,
+                mime: UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
+            )
+            if !attachments.contains(where: { $0.uri == attachment.uri }) {
+                attachments.append(attachment)
+                added += 1
+            }
+        }
+        for payload in data {
+            guard added < 8 else { break }
+            guard let url = writeTempImage(payload) else { continue }
+            let attachment = PromptAttachment(
+                uri: url.absoluteString,
+                name: url.lastPathComponent,
+                mime: UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
+            )
+            if !attachments.contains(where: { $0.uri == attachment.uri }) {
+                attachments.append(attachment)
+                added += 1
+            }
+        }
+    }
+
+    /// Image payloads dropped as raw data (e.g. from a browser) come without a file URL
+    /// — park them in a temp file and attach that.
+    private func writeTempImage(_ data: Data) -> URL? {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OpenCodeHarness", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("png")
+        guard (try? data.write(to: url)) != nil else { return nil }
+        return url
+    }
+
     private func submit() {
         guard canSubmit else { return }
         let value = text
@@ -438,14 +483,86 @@ struct ComposerView: View {
     }
 
     private func attachmentChip(_ attachment: PromptAttachment) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: attachment.isImage ? "photo" : "doc")
-                .font(.system(size: 8.5))
-                .foregroundStyle(Color.ocTeal)
+        Group {
+            if attachment.isImage, let url = URL(string: attachment.uri) {
+                imageChip(attachment, url: url)
+            } else {
+                fileChip(attachment)
+            }
+        }
+    }
+
+    /// Image attachments get a real thumbnail preview, like a Codex drop.
+    private func imageChip(_ attachment: PromptAttachment, url: URL) -> some View {
+        ZStack(alignment: .topTrailing) {
+            VStack(alignment: .leading, spacing: 3) {
+                Group {
+                    if let thumbnail = Self.thumbnail(for: url) {
+                        Image(nsImage: thumbnail)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        ZStack {
+                            Rectangle().fill(Color.ocHover)
+                            Image(systemName: "photo")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Color.ocTextTertiary)
+                        }
+                    }
+                }
+                .frame(width: 52, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(Color.ocBorder, lineWidth: 0.5)
+                )
+
+                Text(attachment.displayName)
+                    .font(.ocMono(8.5))
+                    .lineLimit(1)
+                    .frame(maxWidth: 64)
+                    .foregroundStyle(Color.ocTextSecondary)
+            }
+            .padding(4)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.ocHover))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.ocBorder, lineWidth: 0.5)
+            )
+
+            Button {
+                attachments.removeAll { $0.id == attachment.id }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 6.5, weight: .bold))
+                    .foregroundStyle(Color.ocTextSecondary)
+                    .frame(width: 14, height: 14)
+                    .background(Circle().fill(Color.ocSurface))
+                    .overlay(Circle().strokeBorder(Color.ocBorder, lineWidth: 0.5))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 4, y: -4)
+            .help("Remove attachment")
+        }
+    }
+
+    /// Non-image files get a type-aware icon tile.
+    private func fileChip(_ attachment: PromptAttachment) -> some View {
+        HStack(spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.ocAccent.opacity(0.10))
+                Image(systemName: Self.fileSymbol(for: attachment))
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(Color.ocAccent)
+            }
+            .frame(width: 22, height: 22)
+
             Text(attachment.displayName)
                 .font(.ocMono(9))
                 .lineLimit(1)
                 .frame(maxWidth: 160)
+
             Button {
                 attachments.removeAll { $0.id == attachment.id }
             } label: {
@@ -456,10 +573,41 @@ struct ComposerView: View {
             .buttonStyle(.plain)
         }
         .foregroundStyle(Color.ocTextSecondary)
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 6)
         .padding(.vertical, 4)
         .background(Capsule().fill(Color.ocHover))
         .overlay(Capsule().strokeBorder(Color.ocBorder, lineWidth: 0.5))
+    }
+
+    private static func thumbnail(for url: URL) -> NSImage? {
+        let source = CGImageSourceCreateWithURL(url as CFURL, nil)
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 120
+        ]
+        guard let cgImage = source.flatMap({ CGImageSourceCreateThumbnailAtIndex($0, 0, options as CFDictionary) }) else {
+            return NSImage(contentsOf: url)
+        }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
+    private static func fileSymbol(for attachment: PromptAttachment) -> String {
+        let ext = URL(string: attachment.uri)?.pathExtension.lowercased() ?? ""
+        switch ext {
+        case "swift", "py", "js", "ts", "jsx", "tsx", "go", "rs", "c", "cpp", "h", "m", "mm",
+             "java", "rb", "sh", "zsh", "json", "jsonc", "yaml", "yml", "toml", "xml", "html", "css":
+            return "chevron.left.forwardslash.chevron.right"
+        case "pdf": return "doc.richtext"
+        case "zip", "tar", "gz", "tgz", "7z", "rar", "bz2": return "doc.zipper"
+        case "csv", "tsv", "xlsx", "xls", "numbers": return "tablecells"
+        case "md", "markdown", "txt", "rtf": return "doc.text"
+        case "mov", "mp4", "avi", "mkv", "webm": return "film"
+        case "mp3", "wav", "aac", "m4a", "flac": return "music.note"
+        case "log": return "terminal"
+        case "key", "pem", "pub": return "key"
+        default: return "doc"
+        }
     }
 
     private func suggestionPanel<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -508,6 +656,102 @@ struct ComposerView: View {
             .background(selected ? Color.ocHover : .clear)
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// NSView overlay that captures file-drags before the embedded NSTextView turns
+/// them into path text. Ordinary clicks pass through via hit-test so the text
+/// cursor keeps working; only active drag sessions land on this view.
+struct DropInterceptor: NSViewRepresentable {
+    var onDrop: ([URL], [Data]) -> Void
+
+    func makeNSView(context: Context) -> InterceptorView {
+        let view = InterceptorView()
+        view.onDropHandler = onDrop
+        return view
+    }
+
+    func updateNSView(_ view: InterceptorView, context: Context) {
+        view.onDropHandler = onDrop
+    }
+
+    final class InterceptorView: NSView {
+        var onDropHandler: (([URL], [Data]) -> Void)?
+
+        private static let acceptedTypes: Set<String> = [
+            NSPasteboard.PasteboardType.fileURL.rawValue,
+            NSPasteboard.PasteboardType.URL.rawValue,
+            NSPasteboard.PasteboardType.png.rawValue,
+            NSPasteboard.PasteboardType.tiff.rawValue,
+            UTType.jpeg.identifier,
+            UTType.gif.identifier,
+            UTType.heic.identifier
+        ]
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            registerForDraggedTypes([
+                .fileURL,
+                .URL,
+                .png,
+                .tiff,
+                .init(UTType.jpeg.identifier),
+                .init(UTType.gif.identifier),
+                .init(UTType.heic.identifier)
+            ])
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            // Active drag session? The system drag pasteboard is populated mid-drag.
+            let dragPasteboard = NSPasteboard(name: NSPasteboard.Name("Apple CFPasteboard drag"))
+            return dragPasteboard.types?.isEmpty == false ? self : nil
+        }
+
+        override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+            accepts(sender) ? .copy : []
+        }
+
+        override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+            accepts(sender) ? .copy : []
+        }
+
+        override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+            let pasteboard = sender.draggingPasteboard
+            let urls = (pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL])
+                ?? pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL]
+                ?? []
+            let images = pasteboard.readObjects(forClasses: [NSImage.self]) as? [NSImage] ?? []
+            let data = images.compactMap(\.pngData)
+
+            guard !urls.isEmpty || !data.isEmpty else { return false }
+            onDropHandler?(Array(urls.prefix(8)), data)
+            return true
+        }
+
+        private func accepts(_ sender: NSDraggingInfo) -> Bool {
+            sender.draggingPasteboard.types?.contains(where: { Self.acceptedTypes.contains($0.rawValue) }) ?? false
+        }
+    }
+}
+
+extension NSImage {
+    /// Encoded PNG payload for dropped image data, downscaled so giant screenshots
+    /// don't bloat the session.
+    var pngData: Data? {
+        guard let tiffData = tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiffData) else { return nil }
+        if max(rep.pixelsWide, rep.pixelsHigh) > 2048 {
+            let scale = 2048.0 / Double(max(rep.pixelsWide, rep.pixelsHigh))
+            let size = NSSize(width: Double(rep.pixelsWide) * scale, height: Double(rep.pixelsHigh) * scale)
+            let resized = NSImage(size: size)
+            resized.lockFocus()
+            draw(in: NSRect(origin: .zero, size: size))
+            resized.unlockFocus()
+            guard let resizedTiff = resized.tiffRepresentation,
+                  let resizedRep = NSBitmapImageRep(data: resizedTiff) else { return nil }
+            return resizedRep.representation(using: NSBitmapImageRep.FileType.png, properties: [:])
+        }
+        return rep.representation(using: NSBitmapImageRep.FileType.png, properties: [:])
     }
 }
 
