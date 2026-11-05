@@ -39,7 +39,7 @@ struct ComposerView: View {
     private var editorHeight: CGFloat {
         let lines = max(1, text.components(separatedBy: "\n").count)
         let wrapped = max(0, text.count / 78)
-        return min(178, CGFloat(lines + wrapped) * 18 + 20)
+        return min(178, CGFloat(lines + wrapped) * 18 + 34)
     }
 
     var body: some View {
@@ -140,7 +140,7 @@ struct ComposerView: View {
                     .focused($focused)
                     .frame(height: editorHeight)
                     .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 10)
                     .onKeyPress(.return, phases: .down) { press in
                         if press.modifiers.contains(.shift) || press.modifiers.contains(.option) {
                             return .ignored
