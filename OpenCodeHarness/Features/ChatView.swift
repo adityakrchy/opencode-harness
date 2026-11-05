@@ -349,7 +349,33 @@ struct ChatView: View {
 }
 
 struct WorkingIndicator: View {
+    /// Playful gerunds, in the spirit of Claude Code's "Noodling…", "Pondering…" etc.
+    private static let verbs = [
+        "Thinking",
+        "Pondering",
+        "Noodling",
+        "Brewing",
+        "Cooking",
+        "Scheming",
+        "Conjuring",
+        "Vibing",
+        "Riffing",
+        "Simmering",
+        "Ideating",
+        "Wandering",
+        "Hustling",
+        "Percolating",
+        "Daydreaming",
+        "Narrowing in",
+        "Unravelling",
+        "Assembling",
+        "Wielding",
+        "Venturing",
+    ]
+
     @State private var phase = false
+    @State private var verb: String = Self.verbs.randomElement()!
+
     var body: some View {
         HStack(spacing: 8) {
             HStack(spacing: 3) {
@@ -367,10 +393,13 @@ struct WorkingIndicator: View {
                         )
                 }
             }
-            ShimmerText(text: "Working through the project…")
+            ShimmerText(text: "\(verb)…")
         }
         .padding(.horizontal, 4)
-        .onAppear { phase = true }
+        .onAppear {
+            phase = true
+            verb = Self.verbs.randomElement() ?? "Thinking"
+        }
     }
 }
 
