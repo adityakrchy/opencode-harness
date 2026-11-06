@@ -213,7 +213,8 @@ final class APIClient {
             var query: [(String, String?)] = []
             if let directory { query.append(("directory", directory)) }
             if let archived { query.append(("archived", archived ? "true" : "false")) }
-            if topLevel { query.append(("parent", "null")) }
+            // The API reads "parentID"; "parent" is silently ignored.
+            if topLevel { query.append(("parentID", "null")) }
             if let cursor { query.append(("cursor", cursor)) }
             let data = try await requestData("GET", "/api/session", query: query)
             let page = try decode(SessionJSONPage.self, from: data)
@@ -298,12 +299,12 @@ final class APIClient {
             "delivery": .string(delivery)
         ]
         if !files.isEmpty {
+            // The API's string fields don't accept null — omit them instead.
             body["files"] = .array(files.map { attachment in
-                .object([
-                    "uri": .string(attachment.uri),
-                    "name": attachment.name.map(JSONValue.string) ?? .null,
-                    "description": attachment.description.map(JSONValue.string) ?? .null
-                ])
+                var file: [String: JSONValue] = ["uri": .string(attachment.uri)]
+                if let name = attachment.name { file["name"] = .string(name) }
+                if let description = attachment.description { file["description"] = .string(description) }
+                return .object(file)
             })
         }
         if let resume { body["resume"] = .bool(resume) }
@@ -316,8 +317,11 @@ final class APIClient {
             "text": .string(text)
         ]
         if !files.isEmpty {
-            body["files"] = .array(files.map {
-                .object(["uri": .string($0.uri), "name": $0.name.map(JSONValue.string) ?? .null])
+            // Omit optional string fields rather than sending null.
+            body["files"] = .array(files.map { attachment in
+                var file: [String: JSONValue] = ["uri": .string(attachment.uri)]
+                if let name = attachment.name { file["name"] = .string(name) }
+                return .object(file)
             })
         }
         return try await send("POST", "/api/session/\(sessionID)/command", body: body, as: JSONValue.self)

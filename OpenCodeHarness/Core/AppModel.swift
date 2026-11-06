@@ -29,6 +29,7 @@ final class AppModel: ObservableObject {
     @Published var workspace: Workspace?
     @Published var sessions: [SessionInfo] = []
     @Published var archivedSessions: [SessionInfo] = []
+    @Published var sessionChildren: [String: [SessionInfo]] = [:]
     @Published var selectedSessionID: String?
     @Published var activeSessionIDs: Set<String> = []
     @Published var sessionSearch = ""
@@ -131,7 +132,8 @@ final class AppModel: ObservableObject {
 
     var selectedSession: SessionInfo? {
         sessions.first { $0.id == selectedSessionID } ??
-        archivedSessions.first { $0.id == selectedSessionID }
+        archivedSessions.first { $0.id == selectedSessionID } ??
+        sessionChildren.values.flatMap { $0 }.first { $0.id == selectedSessionID }
     }
 
     var selectedModelInfo: ModelInfo? {
@@ -556,13 +558,25 @@ final class AppModel: ObservableObject {
 
     // MARK: - Sessions
 
+    /// Child (subagent) sessions of a session, oldest first.
+    func children(of sessionID: String) -> [SessionInfo] {
+        (sessionChildren[sessionID] ?? []).sorted { $0.time.created < $1.time.created }
+    }
+
     func loadSessions() async {
         guard let api, let workspace else { return }
         do {
-            let fresh = try await api.sessions(archived: false, topLevel: true)
-            sessions = fresh.filter {
+            // Fetch every session (roots and children) and split them so
+            // subagent sessions stay nested under their parent in the sidebar.
+            let fresh = try await api.sessions(archived: false, topLevel: false)
+            let inWorkspace = fresh.filter {
                 $0.location?.directory == workspace.directory || $0.location == nil
             }
+            sessions = inWorkspace.filter { $0.parentID == nil }
+            sessionChildren = Dictionary(
+                grouping: inWorkspace.filter { $0.parentID != nil },
+                by: { $0.parentID! }
+            )
         } catch {
             // Don't flash errors during transient reconnects.
             return

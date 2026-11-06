@@ -437,17 +437,7 @@ struct UserMessageView: View {
                 if !message.attachments.isEmpty {
                     HStack(spacing: 5) {
                         ForEach(message.attachments) { attachment in
-                            HStack(spacing: 4) {
-                                Image(systemName: attachment.isImage ? "photo" : "doc")
-                                    .font(.system(size: 8.5))
-                                Text(attachment.displayName)
-                                    .font(.ocMono(9))
-                                    .lineLimit(1)
-                            }
-                            .foregroundStyle(Color.ocTextSecondary)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(Color.ocHover))
+                            MessageAttachmentChip(attachment: attachment)
                         }
                     }
                 }
@@ -936,5 +926,84 @@ struct ErrorMessageView: View {
             .background(RoundedRectangle(cornerRadius: 9).fill(Color.ocDanger.opacity(0.07)))
             .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color.ocDanger.opacity(0.16), lineWidth: 0.6))
         }
+    }
+}
+
+/// Attachment chip on a user message: real preview tile for images,
+/// icon capsule for other files.
+struct MessageAttachmentChip: View {
+    var attachment: PromptAttachment
+
+    @State private var thumbnail: NSImage?
+
+    var body: some View {
+        Group {
+            if attachment.isImage, let url = URL(string: attachment.uri) {
+                HStack(spacing: 4) {
+                    Group {
+                        if let thumbnail {
+                            Image(nsImage: thumbnail)
+                                .resizable()
+                                .scaledToFill()
+                        } else {
+                            ZStack {
+                                Rectangle().fill(Color.ocHover)
+                                Image(systemName: "photo")
+                                    .font(.system(size: 8.5))
+                                    .foregroundStyle(Color.ocTextTertiary)
+                            }
+                        }
+                    }
+                    .frame(width: 40, height: 30)
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .strokeBorder(Color.ocBorder, lineWidth: 0.4)
+                    )
+
+                    Text(attachment.displayName)
+                        .font(.ocMono(9))
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 3)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Color.ocHover))
+                .overlay(Capsule().strokeBorder(Color.ocBorder, lineWidth: 0.5))
+                .task {
+                    let url = url
+                    let decoded = await Task.detached(priority: .utility) {
+                        Self.loadThumbnail(url: url)
+                    }.value
+                    thumbnail = decoded
+                }
+                .help(attachment.displayName)
+            } else {
+                HStack(spacing: 4) {
+                    Image(systemName: "doc")
+                        .font(.system(size: 8.5))
+                    Text(attachment.displayName)
+                        .font(.ocMono(9))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(Color.ocTextSecondary)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Color.ocHover))
+            }
+        }
+    }
+
+    /// Downsampled preview so multi-megabyte screenshots don't blow up memory.
+    private static func loadThumbnail(url: URL) -> NSImage? {
+        let source = CGImageSourceCreateWithURL(url as CFURL, nil)
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 120
+        ]
+        guard let cgImage = source.flatMap({ CGImageSourceCreateThumbnailAtIndex($0, 0, options as CFDictionary) }) else {
+            return NSImage(contentsOf: url)
+        }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
     }
 }

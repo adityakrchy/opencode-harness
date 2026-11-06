@@ -9,6 +9,25 @@ struct SidebarView: View {
     @State private var renameText = ""
     @State private var showSwitcher = false
 
+    private var searchActive: Bool {
+        !model.sessionSearch.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Root sessions normally; when searching, a flat pool including
+    /// nested subagent sessions is searched so every match is visible.
+    private var sidebarSessions: [SessionInfo] {
+        guard searchActive else { return model.workspaceRecentSessions }
+        var pool: [SessionInfo] = model.showArchived
+            ? model.archivedSessions
+            : model.sessions + model.sessionChildren.values.flatMap { $0 }
+        let query = model.sessionSearch.lowercased()
+        return pool.filter {
+            $0.displayTitle.lowercased().contains(query) ||
+            ($0.agent?.lowercased().contains(query) ?? false) ||
+            ($0.model?.id.lowercased().contains(query) ?? false)
+        }
+    }
+
     private var groups: [(String, [SessionInfo])] {
         let calendar = Calendar.current
         var today: [SessionInfo] = []
@@ -16,7 +35,7 @@ struct SidebarView: View {
         var week: [SessionInfo] = []
         var older: [SessionInfo] = []
 
-        for session in model.workspaceRecentSessions {
+        for session in sidebarSessions {
             let date = session.time.updatedDate
             if calendar.isDateInToday(date) {
                 today.append(session)
@@ -339,13 +358,13 @@ struct SidebarView: View {
                 ForEach(groups, id: \.0) { group in
                     Section {
                         ForEach(group.1) { session in
-                            SessionRow(
+                            SessionListRow(
                                 session: session,
-                                selected: session.id == model.selectedSessionID,
-                                running: model.activeSessionIDs.contains(session.id),
-                                onRename: {
-                                    renameText = session.displayTitle
-                                    renameSession = session
+                                depth: 0,
+                                showChildren: !searchActive,
+                                onRename: { target in
+                                    renameText = target.displayTitle
+                                    renameSession = target
                                 }
                             )
                         }
@@ -366,7 +385,7 @@ struct SidebarView: View {
                         .background(Color.ocSidebar.opacity(0.92).blur(radius: 8))
                     }
                 }
-                if model.workspaceRecentSessions.isEmpty {
+                if sidebarSessions.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: model.sessionSearch.isEmpty ? "bubble.left" : "magnifyingglass")
                             .font(.system(size: 18, weight: .light))
@@ -389,13 +408,13 @@ struct SidebarView: View {
     private func section(_ title: String, sessions: [SessionInfo]) -> some View {
         Section {
             ForEach(sessions) { session in
-                SessionRow(
+                SessionListRow(
                     session: session,
-                    selected: session.id == model.selectedSessionID,
-                    running: model.activeSessionIDs.contains(session.id),
-                    onRename: {
-                        renameText = session.displayTitle
-                        renameSession = session
+                    depth: 0,
+                    showChildren: false,
+                    onRename: { target in
+                        renameText = target.displayTitle
+                        renameSession = target
                     }
                 )
             }
@@ -477,81 +496,150 @@ struct SidebarView: View {
     }
 }
 
+/// Renders one session and, recursively, its nested child sessions.
+struct SessionListRow: View {
+    @EnvironmentObject private var model: AppModel
+    var session: SessionInfo
+    var depth: Int
+    var showChildren: Bool
+    var onRename: (SessionInfo) -> Void
+
+    @State private var expanded = true
+
+    private var children: [SessionInfo] {
+        showChildren ? model.children(of: session.id) : []
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            SessionRow(
+                session: session,
+                selected: model.selectedSessionID == session.id,
+                running: model.activeSessionIDs.contains(session.id),
+                depth: depth,
+                isSubagent: session.parentID != nil,
+                childCount: children.count,
+                expanded: expanded,
+                onToggleExpand: {
+                    withAnimation(Motion.quick) { expanded.toggle() }
+                },
+                onRename: { onRename(session) }
+            )
+            if expanded && !children.isEmpty {
+                ForEach(children) { child in
+                    SessionListRow(
+                        session: child,
+                        depth: depth + 1,
+                        showChildren: showChildren,
+                        onRename: onRename
+                    )
+                }
+            }
+        }
+    }
+}
+
 struct SessionRow: View {
     @EnvironmentObject private var model: AppModel
     var session: SessionInfo
     var selected: Bool
     var running: Bool
+    var depth: Int = 0
+    var isSubagent: Bool = false
+    var childCount: Int = 0
+    var expanded: Bool = true
+    var onToggleExpand: (() -> Void)? = nil
     var onRename: () -> Void
 
     @State private var hovering = false
 
     var body: some View {
-        Button {
-            model.selectSession(session)
-        } label: {
-            HStack(spacing: 9) {
-                ZStack {
-                    Circle()
-                        .fill(selected ? Color.ocAccent : Color.ocHover)
-                        .frame(width: 24, height: 24)
-                    if running {
-                        Spinner(size: 11, tint: selected ? .white : .ocAccent)
-                    } else {
-                        Image(systemName: "bubble.left")
-                            .font(.system(size: 9.5, weight: .medium))
-                            .foregroundStyle(selected ? Color.white : Color.ocTextTertiary)
-                    }
-                }
-                VStack(alignment: .leading, spacing: 2.5) {
-                    Text(session.displayTitle)
-                        .font(.system(size: 12, weight: selected ? .semibold : .regular))
-                        .foregroundStyle(Color.ocTextPrimary)
-                        .lineLimit(1)
-                    HStack(spacing: 5) {
-                        if let modelName = session.model?.shortName {
-                            Text(modelName)
-                                .lineLimit(1)
-                        }
-                        if let cost = session.cost, cost > 0 {
-                            Text("·")
-                            Text(Format.cost(cost))
+        HStack(spacing: 4) {
+            Button {
+                model.selectSession(session)
+            } label: {
+                HStack(spacing: 9) {
+                    ZStack {
+                        Circle()
+                            .fill(selected ? Color.ocAccent : Color.ocHover)
+                            .frame(width: 24, height: 24)
+                        if running {
+                            Spinner(size: 11, tint: selected ? .white : .ocAccent)
+                        } else {
+                            Image(systemName: isSubagent ? "person.2" : "bubble.left")
+                                .font(.system(size: isSubagent ? 8.5 : 9.5, weight: .medium))
+                                .foregroundStyle(selected ? Color.white : Color.ocTextTertiary)
                         }
                     }
-                    .font(.ocMono(8.5))
-                    .foregroundStyle(Color.ocTextTertiary)
+                    VStack(alignment: .leading, spacing: 2.5) {
+                        Text(session.displayTitle)
+                            .font(.system(size: isSubagent ? 11.5 : 12, weight: selected ? .semibold : .regular))
+                            .foregroundStyle(Color.ocTextPrimary)
+                            .lineLimit(1)
+                        HStack(spacing: 5) {
+                            if isSubagent {
+                                Text("subagent")
+                            }
+                            if let modelName = session.model?.shortName {
+                                Text(modelName)
+                                    .lineLimit(1)
+                            }
+                            if let cost = session.cost, cost > 0 {
+                                Text("·")
+                                Text(Format.cost(cost))
+                            }
+                        }
+                        .font(.ocMono(8.5))
+                        .foregroundStyle(Color.ocTextTertiary)
+                    }
+                    Spacer(minLength: 2)
+                    Text(Format.relative(session.time.updatedDate))
+                        .font(.ocMono(8.5))
+                        .foregroundStyle(Color.ocTextTertiary.opacity(0.8))
                 }
-                Spacer(minLength: 2)
-                Text(Format.relative(session.time.updatedDate))
-                    .font(.ocMono(8.5))
-                    .foregroundStyle(Color.ocTextTertiary.opacity(0.8))
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 9)
-                    .fill(selected ? Color.ocAccent.opacity(0.14) : (hovering ? Color.ocHover : .clear))
-                    .animation(Motion.quick, value: selected)
-            )
-            .overlay(alignment: .leading) {
-                if selected {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.ocAccent)
-                        .frame(width: 2.5, height: 20)
-                        .offset(x: -1)
+            .buttonStyle(.plain)
+
+            if childCount > 0, let onToggleExpand {
+                Button(action: onToggleExpand) {
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 7.5, weight: .bold))
+                        .foregroundStyle(Color.ocTextTertiary)
+                        .frame(width: 16, height: 22)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .help(expanded ? "Hide nested sessions" : "Show nested sessions")
             }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 9)
+                .fill(selected ? Color.ocAccent.opacity(0.14) : (hovering ? Color.ocHover : .clear))
+                .animation(Motion.quick, value: selected)
+        )
+        .overlay(alignment: .leading) {
+            if selected {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.ocAccent)
+                    .frame(width: 2.5, height: 20)
+                    .offset(x: -1)
+            }
+        }
+        .contentShape(Rectangle())
         .padding(.horizontal, 7)
+        .padding(.leading, CGFloat(depth) * 14)
         .onHover { value in
             withAnimation(Motion.quick) { hovering = value }
         }
         .contextMenu {
             Button("Rename…", action: onRename)
-            Button("Fork Session") {
-                Task { await model.forkSession(session) }
+            if !isSubagent {
+                Button("Fork Session") {
+                    Task { await model.forkSession(session) }
+                }
             }
             Button("Export Session") {
                 model.selectSession(session)
